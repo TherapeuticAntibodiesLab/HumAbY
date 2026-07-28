@@ -1,0 +1,60 @@
+# syntax=docker/dockerfile:1.7
+
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    APP_HOME=/opt/humanizer \
+    HUMANIZER_DB_DIR=/opt/humanizer_db \
+    HUMANIZER_DB_PATH=/opt/humanizer_db/human_germline_frameworks
+
+WORKDIR ${APP_HOME}
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ncbi-blast+ \
+    git \
+    wget \
+    ca-certificates \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Keep dependency install cached as long as requirements.txt does not change
+COPY requirements.txt ${APP_HOME}/requirements.txt
+RUN python -m pip install --upgrade pip setuptools wheel
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install -r ${APP_HOME}/requirements.txt
+
+# Copy the application code into a path that will NOT be shadowed by a bind mount
+COPY . ${APP_HOME}
+
+# Build the germline BLAST database during image build.
+# This assumes the repository contains the IMGT FASTA inputs in imgt_download/
+# and the database builder in database_setup/build_germline_database.py.
+RUN test -f ${APP_HOME}/database_setup/build_germline_database.py || (echo 'Missing database_setup/build_germline_database.py' && exit 1)
+RUN mkdir -p ${HUMANIZER_DB_DIR}
+RUN test -d ${APP_HOME}/imgt_download || (echo 'Missing imgt_download/ with IMGT FASTA files' && exit 1)
+RUN test -f ${APP_HOME}/imgt_download/IGHV.fasta || (echo 'Missing imgt_download/IGHV.fasta' && exit 1)
+RUN test -f ${APP_HOME}/imgt_download/IGHD.fasta || (echo 'Missing imgt_download/IGHD.fasta' && exit 1)
+RUN test -f ${APP_HOME}/imgt_download/IGHJ.fasta || (echo 'Missing imgt_download/IGHJ.fasta' && exit 1)
+RUN test -f ${APP_HOME}/imgt_download/IGKV.fasta || (echo 'Missing imgt_download/IGKV.fasta' && exit 1)
+RUN test -f ${APP_HOME}/imgt_download/IGKJ.fasta || (echo 'Missing imgt_download/IGKJ.fasta' && exit 1)
+RUN test -f ${APP_HOME}/imgt_download/IGLV.fasta || (echo 'Missing imgt_download/IGLV.fasta' && exit 1)
+RUN test -f ${APP_HOME}/imgt_download/IGLJ.fasta || (echo 'Missing imgt_download/IGLJ.fasta' && exit 1)
+RUN python ${APP_HOME}/database_setup/build_germline_database.py \
+    ${APP_HOME}/imgt_download \
+    ${HUMANIZER_DB_DIR}
+
+# Keep compatibility with the pipeline default path inside the baked image
+RUN ln -s ${HUMANIZER_DB_DIR} ${APP_HOME}/imgt_germline_database
+
+# Validate runtime tools and database
+RUN python -c "from Bio import SeqIO; import dash; print('Python deps OK')" \
+ && anarcii --help >/dev/null \
+ && blastp -help >/dev/null \
+ && makeblastdb -help >/dev/null \
+ && blastdbcmd -db ${HUMANIZER_DB_PATH} -info >/dev/null
+
+WORKDIR /workspace
+CMD ["/bin/bash"]
