@@ -1150,7 +1150,7 @@ def preprocess_x_characters(sequence: str) -> str:
     
     Based on antibody domain structure analysis:
     - X in CDR3 context (CAR[X]GTT) represents D-segment diversity → use Glycine (most common)
-    - X after VH domain boundary (WGQGTLVTVSS) → TRUNCATE at domain boundary (scientifically justified)
+    - X after VH domain boundary (WGQGTLVTVSS|WGQGTSVTVSS) → TRUNCATE at domain boundary (scientifically justified)
     - Other X characters → use Alanine (conservative)
     
     Scientific rationale:
