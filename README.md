@@ -292,6 +292,15 @@ The pipeline ensures **perfect CDR preservation** through multi-layered validati
 
 ## Usage
 
+### Grapgical User Interface (GUI)
+
+```bash
+source humanizer-env/bin/activate
+python3 dash_app.py
+```
+
+The system will be available at http://0.0.0.0:8050/
+
 ### Basic Command Structure
 
 ```bash
