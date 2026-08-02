@@ -32,11 +32,11 @@ This pipeline implements a **VDJ-based CDR grafting approach** for antibody huma
 2. **BLAST+ Suite** (blastp, makeblastdb, blastdbcmd)
 3. **ANARCII** - Advanced Antibody Numbering Tool
 4. **BioPython** - For sequence parsing and manipulation
+5. **Dash** - For the Graphical User Interface (GUI)
 
 ### Step 1: Create Virtual Environment
 
 ```bash
-cd /projects/antibody-humanizer
 python3 -m venv humanizer-env
 source humanizer-env/bin/activate
 ```
@@ -45,10 +45,11 @@ source humanizer-env/bin/activate
 
 ```bash
 # Install required Python packages
-pip install biopython anarcii
+pip install -r requirements.txt
 
 # BioPython is mandatory for sequence parsing and FASTA file handling
 # ANARCII is mandatory for CDR/framework identification and numbering
+# Dash is mandatory for the GUI
 ```
 
 ### Step 3: Install BLAST+
@@ -57,6 +58,12 @@ pip install biopython anarcii
 # Ubuntu/Debian
 sudo apt-get update
 sudo apt-get install ncbi-blast+
+
+# Fedora
+curl -O "https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/$(curl -s 'https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/' | grep -o 'ncbi-blast-[0-9.]*+-x64-linux.tar.gz' | head -n 1)"
+tar -zxvf ncbi-blast-*-x64-linux.tar.gz
+sudo cp ncbi-blast-*/bin/* /usr/local/bin/
+rm -rf ncbi-blast-*
 
 # CentOS/RHEL
 sudo yum install ncbi-blast+
@@ -85,14 +92,16 @@ python3 -c "import tempfile, subprocess, logging; print('Standard library OK')"
 
 The pipeline uses a **VDJ-reconstructed germline database** containing 234,514 human antibody frameworks generated from IMGT germline V, D, and J segments.
 
+This comes with the repo.  The steps used were:
+
 ### Step 1: Download IMGT Germline Files
 
 Download the official IMGT germline sequences:
 
 ```bash
 # Create input directory
-mkdir -p /projects/antibody-humanizer-assets/imgt_database/human/
-cd /projects/antibody-humanizer-assets/imgt_database/human/
+mkdir -p imgt_download
+cd imgt_download
 
 # Download from IMGT/GENE-DB (replace with current URLs)
 # Heavy chain segments
@@ -115,27 +124,26 @@ wget "https://www.imgt.org/download/V-QUEST/IMGT_V-QUEST_reference_directory/Hom
 
 ```bash
 # Check file sizes (approximate expected sizes)
-ls -lh /projects/antibody-humanizer-assets/imgt_database/human/*.fasta
+ls -lh imgt_download/*.fasta
 
 # Expected files and approximate sizes:
-# IGHV.fasta: ~186K   (Heavy chain V genes)
-# IGHD.fasta: ~5.1K   (Heavy chain D genes)
+# IGHV.fasta: ~193K   (Heavy chain V genes)
+# IGHD.fasta: ~5.3K   (Heavy chain D genes)
 # IGHJ.fasta: ~2.0K   (Heavy chain J genes)
-# IGKV.fasta: ~54K    (Kappa light chain V genes)
-# IGKJ.fasta: ~1.1K   (Kappa light chain J genes)
-# IGLV.fasta: ~50K    (Lambda light chain V genes)
-# IGLJ.fasta: ~1.2K   (Lambda light chain J genes)
+# IGKV.fasta: ~56K    (Kappa light chain V genes)
+# IGKJ.fasta: ~1.2K   (Kappa light chain J genes)
+# IGLV.fasta: ~54K    (Lambda light chain V genes)
+# IGLJ.fasta: ~1.3K   (Lambda light chain J genes)
 ```
 
 ### Step 3: Build Germline Database
 
 ```bash
-cd /projects/antibody-humanizer
 source humanizer-env/bin/activate
 
 # Build the VDJ-reconstructed database
 cd database_setup
-python3 build_germline_database.py
+python3 build_germline_database.py ../imgt_download/ ../imgt_germline_database/
 ```
 
 This process:
@@ -143,8 +151,8 @@ This process:
 1. Parses all IMGT germline segments (V, D, J)
 2. Translates nucleotide sequences to proteins
 3. Reconstructs complete frameworks:
-   - Heavy chains: 354 V × 47 D × 14 J = 232,932 frameworks
-   - Light chains: 97 κV × 6 κJ + 101 λV × 10 λJ = 1,582 frameworks
+   - Heavy chains: V × D × J
+   - Light chains: κV × κJ + λV × λJ
 4. Creates BLAST-searchable protein database
 5. Generates statistics and validation files
 
@@ -167,9 +175,35 @@ cat ../imgt_germline_database/database_statistics.txt
 
 Expected statistics:
 
-- Heavy chain frameworks: 232,932
-- Light chain frameworks: 1,582
-- **Total frameworks: 234,514**
+- Heavy chain frameworks: 241,920
+- Light chain frameworks: 1,851
+- **Total frameworks: 243,771**
+
+Germline Segments Used:
+  Heavy V segments: 360
+  Heavy D segments: 48
+  Heavy J segments: 14
+  Kappa V segments: 101
+  Kappa J segments: 7
+  Lambda V segments: 105
+  Lambda J segments: 11
+
+Reconstructed Frameworks:
+  Heavy chain frameworks: 241,920
+  Light chain frameworks: 1,851
+  Total frameworks: 243,771
+
+Theoretical Combinations:
+  Heavy (V×D×J): 241,920
+  Kappa (V×J): 707
+  Lambda (V×J): 1,155
+  Total possible: 243,782
+
+Database Files:
+  Combined FASTA: human_germline_frameworks.fasta
+  Heavy FASTA: human_germline_heavy.fasta
+  Light FASTA: human_germline_light.fasta
+  BLAST database: human_germline_frameworks.*
 
 ## Scientific Background
 
@@ -221,25 +255,6 @@ The pipeline uses a **comprehensive VDJ reconstruction approach**:
 3. **Framework Completeness**: Each framework contains complete FR1-FR4 regions
 4. **Population Diversity**: Includes all major human allelic variants
 
-#### Database Composition
-
-**Source Data** (IMGT/GENE-DB):
-
-- Heavy V segments: 354 sequences
-- Heavy D segments: 47 sequences  
-- Heavy J segments: 14 sequences
-- Kappa V segments: 97 sequences
-- Kappa J segments: 6 sequences
-- Lambda V segments: 101 sequences
-- Lambda J segments: 10 sequences
-
-**Reconstructed Frameworks**:
-
-- Heavy chains: 354 × 47 × 14 = **232,932 frameworks**
-- Kappa chains: 97 × 6 = **582 frameworks**
-- Lambda chains: 101 × 10 = **1,000 frameworks**
-- **Total: 234,514 human germline frameworks**
-
 ### Domain Boundary Recognition
 
 ```python
@@ -280,7 +295,6 @@ The pipeline ensures **perfect CDR preservation** through multi-layered validati
 ### Basic Command Structure
 
 ```bash
-cd /projects/antibody-humanizer
 source humanizer-env/bin/activate
 python3 humanize.py <input_file> [options]
 ```
@@ -421,7 +435,6 @@ python3 humanize.py /path/to/input.txt --optimization 4  # + Scientific Rules (M
 
 ```bash
 # Complete workflow example
-cd /projects/antibody-humanizer
 source humanizer-env/bin/activate
 
 # 1. Check structure extraction
@@ -488,7 +501,7 @@ The pipeline typically generates:
 
 ### Database Validation
 
-- **Completeness**: All 234,514 theoretical V×D×J combinations generated
+- **Completeness**: All 243,782 theoretical V×D×J combinations generated
 - **Sequence Integrity**: Valid amino acid sequences only
 - **BLAST Indexing**: Searchable protein database with all required files
 - **Statistics Verification**: Accurate counts and file sizes
@@ -535,7 +548,7 @@ ping www.imgt.org
 # Navigate to: Homo sapiens > IG > Download sequences
 
 # Verify file integrity
-wc -l /projects/antibody-humanizer-assets/imgt_database/human/*.fasta
+wc -l imgt_download/*.fasta
 ```
 
 #### 2. Database Build Failures
@@ -545,10 +558,10 @@ wc -l /projects/antibody-humanizer-assets/imgt_database/human/*.fasta
 df -h .
 
 # Verify all input files exist
-ls -la /projects/antibody-humanizer-assets/imgt_database/human/
+ls -la imgt_download
 
 # Check permissions
-chmod +r /projects/antibody-humanizer-assets/imgt_database/human/*.fasta
+chmod +r imgt_download/*.fasta
 ```
 
 #### 3. BLAST Database Errors
@@ -560,7 +573,7 @@ blastdbcmd -db imgt_germline_database/human_germline_frameworks -info
 # Rebuild if corrupted
 cd database_setup
 rm -rf ../imgt_germline_database
-python3 build_germline_database.py
+python3 build_germline_database.py ../imgt_download/ ../imgt_germline_database/
 ```
 
 ### Runtime Issues
@@ -579,7 +592,7 @@ grep -v "^[ACDEFGHIKLMNPQRSTVWY]*$" your_input_file.txt
 
 ```bash
 # Test ANARCII with simple sequence
-echo "QVQLKESGPGLVAPSQSLSFTCTVSGFSLSSYGVHWVRQPPGKGLEWLGVIWAGGSTHYNSALMSRLSISKDNSKSQVFLKMNSLQTDDTAMYYCARDPYDGAMDYWGQGTSVTVSS" | anarcii -i stdin
+anarcii "QVQLKESGPGLVAPSQSLSFTCTVSGFSLSSYGVHWVRQPPGKGLEWLGVIWAGGSTHYNSALMSRLSISKDNSKSQVFLKMNSLQTDDTAMYYCARDPYDGAMDYWGQGTSVTVSS"
 
 # Check for sequence length issues (should be ~110 AA for VH, ~110 AA for VL)
 ```
@@ -594,10 +607,10 @@ Possible causes:
 
 ```bash
 # Test with known good sequence
-python3 humanize.py /projects/antibody-humanizer-assets/tests/mAb#55 -o test_output
+python3 humanize.py test_input.txt -o test_output
 
 # Check BLAST connectivity
-blastp -query test_sequence.fasta -db imgt_germline_database/human_germline_frameworks -outfmt 6 -max_target_seqs 5
+blastp -query test_input.txt -db imgt_germline_database/human_germline_frameworks -outfmt 6 -max_target_seqs 5
 ```
 
 ## Performance Benchmarks
@@ -643,7 +656,7 @@ The pipeline includes several performance optimizations implemented for producti
 
 #### **Intelligent Database Usage** 🔍
 - **BLAST optimization**: Tuned parameters for antibody sequences
-- **Memory management**: Efficient handling of 234K+ framework database
+- **Memory management**: Efficient handling of 243K+ framework database
 - **I/O optimization**: Minimized disk operations
 
 ### Scalability Characteristics
@@ -773,6 +786,6 @@ The pipeline includes several performance optimizations implemented for producti
 ---
 
 **Pipeline Version**: 2.1 (Optimized Deduplication + Enhanced Database)  
-**Last Updated**: September 26, 2025  
-**Database Version**: IMGT 2025 (234,514 frameworks)  
-**Core Files**: `humanize.py`, `cdr.py`, `database_setup/build_germline_database.py`
+**Last Updated**: August 02, 2026  
+**Database Version**: IMGT 2026 (243,771 frameworks)  
+**Core Files**: `humanize.py`, `cdr.py`, `database_setup/build_germline_database.py`, `dash_app.py`
