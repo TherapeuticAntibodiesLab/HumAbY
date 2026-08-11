@@ -464,6 +464,13 @@ def enrich_backmutation_report(
     current_chain = None
     annotation_cache = {}
     sequence_counts = {"VH": 0, "VL": 0}
+    rules_header_written = False
+    rule_labels = {
+        "murine_germline_difference": "Murine vs murine germline difference",
+        "cysteine_proline": "Cysteine/Proline protection",
+        "position_71": "Internal position 71 restoration",
+        "fr4_motif": "FR4 motif correction",
+    }
     proposed_sequences = proposed_sequences or {"VH": [], "VL": []}
     enriched_lines = [
         "BACKMUTATION RESULTS",
@@ -512,6 +519,7 @@ def enrich_backmutation_report(
         if line.startswith("hGerm "):
             if current_chain:
                 sequence_counts[current_chain] += 1
+                rules_header_written = False
                 enriched_lines.extend([
                     f"{current_chain} candidate {sequence_counts[current_chain]}",
                     "-" * (len(current_chain) + len(" candidate ") + len(str(sequence_counts[current_chain]))),
@@ -536,9 +544,9 @@ def enrich_backmutation_report(
             ])
             if candidate_index < len(chain_proposals):
                 changes = compare_backmutations(chain_proposals[candidate_index], backmutated_sequence)
-                enriched_lines.append(f"Back-mutations realizadas: {len(changes)}")
+                enriched_lines.append(f"Back-mutations performed: {len(changes)}")
                 if changes:
-                    enriched_lines.append("Cambios (posición: humanizada -> backmutada):")
+                    enriched_lines.append("Changes (position: humanized -> backmutated):")
                     enriched_lines.extend(
                         f"  {change['position']}: {change['from']} -> {change['to']}"
                         for change in changes
@@ -548,7 +556,7 @@ def enrich_backmutation_report(
                     f"{current_chain} candidate {sequence_counts[current_chain]} effective back-mutations={len(changes)}",
                 )
             else:
-                enriched_lines.append("Back-mutations realizadas: no disponible (secuencia humanizada previa ausente)")
+                enriched_lines.append("Back-mutations performed: unavailable (previous humanized sequence missing)")
             enriched_lines.extend(["", "Germline determined from this backmt sequence:"])
             cache_key = (current_chain, backmutated_sequence)
             if cache_key not in annotation_cache:
@@ -566,6 +574,19 @@ def enrich_backmutation_report(
             enriched_lines.extend(annotation_cache[cache_key])
             enriched_lines.append("")
             continue
+
+        if line.startswith("rule ") and current_chain:
+            rule_match = re.match(r"^rule\s+(\S+)\s+count=(\d+)\s+positions=(\S+)$", stripped)
+            if rule_match:
+                rule_name, count, positions = rule_match.groups()
+                if not rules_header_written:
+                    enriched_lines.append("Rules applied:")
+                    enriched_lines.append("  Rule | Changes | Positions")
+                    rules_header_written = True
+                enriched_lines.append(
+                    f"  {rule_labels.get(rule_name, rule_name)} | {count} | {positions}"
+                )
+                continue
 
         enriched_lines.append(line)
 
@@ -778,6 +799,16 @@ def run_backmutation(
         report_file.write_text(enriched_report, encoding="utf-8")
         _write_backmutation_log(backmutation_log, f"Wrote enriched backmutation report: {report_file}; bytes={report_file.stat().st_size}")
 
+        # Isolated post-processing module: final backmutated sequences vs human germlines.
+        from final_germline_alignment import run_final_germline_alignment
+        final_germline_report = run_final_germline_alignment(
+            result.stdout, human_database, output_dir, top_n=5
+        )
+        _write_backmutation_log(
+            backmutation_log,
+            f"Wrote final-sequence top-5 germline alignment report: {final_germline_report}",
+        )
+
         if result.stderr:
             stderr_file = output_path / "backmutation.stderr.txt"
             stderr_file.write_text(result.stderr, encoding="utf-8")
@@ -795,14 +826,16 @@ def run_backmutation(
             summary.write(f"Opt1 input folder: {opt1_dir}\n")
             summary.write(f"Raw output: {report_file.name}\n")
             summary.write(f"Backmutation log: {log_file.name}\n")
+            summary.write(f"Final germline top-5 report: {final_germline_report.name}\n")
+            summary.write("Final germline alignment log: final_germline_alignment.log\n")
             for chain_type in ("VH", "VL"):
                 candidate_counts = mutation_counts[chain_type]
                 summary.write(
-                    f"{chain_type} back-mutations por candidato: "
-                    f"{', '.join(map(str, candidate_counts)) if candidate_counts else 'no disponible'}\n"
+                    f"{chain_type} back-mutations per candidate: "
+                    f"{', '.join(map(str, candidate_counts)) if candidate_counts else 'unavailable'}\n"
                 )
-                summary.write(f"{chain_type} back-mutations acumuladas: {sum(candidate_counts)}\n")
-            summary.write(f"Total de back-mutations efectivas: {mutation_counts['total']}\n")
+                summary.write(f"{chain_type} cumulative back-mutations: {sum(candidate_counts)}\n")
+            summary.write(f"Total effective back-mutations: {mutation_counts['total']}\n")
             if result.stderr:
                 summary.write("Warnings/errors: backmutation.stderr.txt\n")
 
@@ -1150,7 +1183,7 @@ def preprocess_x_characters(sequence: str) -> str:
     
     Based on antibody domain structure analysis:
     - X in CDR3 context (CAR[X]GTT) represents D-segment diversity → use Glycine (most common)
-    - X after VH domain boundary (WGQGTLVTVSS|WGQGTSVTVSS) → TRUNCATE at domain boundary (scientifically justified)
+    - X after VH domain boundary (WGQGTLVTVSS) → TRUNCATE at domain boundary (scientifically justified)
     - Other X characters → use Alanine (conservative)
     
     Scientific rationale:

@@ -1,0 +1,31 @@
+IMGT Germline Database Statistics
+========================================
+
+Database Directory: imgt_germline_database
+Source Directory: imgt_download
+
+Germline Segments Used:
+  Heavy V segments: 360
+  Heavy D segments: 48
+  Heavy J segments: 14
+  Kappa V segments: 101
+  Kappa J segments: 7
+  Lambda V segments: 105
+  Lambda J segments: 11
+
+Reconstructed Frameworks:
+  Heavy chain frameworks: 241,920
+  Light chain frameworks: 1,851
+  Total frameworks: 243,771
+
+Theoretical Combinations:
+  Heavy (V×D×J): 241,920
+  Kappa (V×J): 707
+  Lambda (V×J): 1,155
+  Total possible: 243,782
+
+Database Files:
+  Combined FASTA: human_germline_frameworks.fasta
+  Heavy FASTA: human_germline_heavy.fasta
+  Light FASTA: human_germline_light.fasta
+  BLAST database: human_germline_frameworks.*

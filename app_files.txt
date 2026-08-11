@@ -1,0 +1,134 @@
+.
+├── app_files.txt
+├── app_runs
+│   ├── hola_20260326_145308_b5b5ff05
+│   │   ├── input
+│   │   │   └── input_sequences.txt
+│   │   ├── logs
+│   │   │   └── pipeline.log
+│   │   ├── metadata.json
+│   │   └── output
+│   ├── teste2_20260327_141404_a94a4b19
+│   │   ├── input
+│   │   │   └── input_sequences.txt
+│   │   ├── logs
+│   │   │   └── pipeline.log
+│   │   ├── metadata.json
+│   │   └── output
+│   │       ├── humanization_summary.txt
+│   │       ├── humanized_vh.fasta
+│   │       └── humanized_vl.fasta
+│   ├── teste3_20260331_143516_555c891d
+│   │   ├── input
+│   │   │   └── input_sequences.txt
+│   │   ├── logs
+│   │   │   └── pipeline.log
+│   │   ├── metadata.json
+│   │   └── output
+│   │       ├── humanization_summary.txt
+│   │       ├── humanized_vh.fasta
+│   │       └── humanized_vl.fasta
+│   ├── teste_a_20260327_142652_72a22b0f
+│   │   ├── input
+│   │   │   └── input_sequences.txt
+│   │   ├── logs
+│   │   │   └── pipeline.log
+│   │   ├── metadata.json
+│   │   └── output
+│   │       ├── humanization_summary.txt
+│   │       ├── humanized_vh.fasta
+│   │       └── humanized_vl.fasta
+│   ├── testeop_1_20260402_133242_33d4aa83
+│   │   ├── input
+│   │   │   └── input_sequences.txt
+│   │   ├── logs
+│   │   │   └── pipeline.log
+│   │   ├── metadata.json
+│   │   └── output
+│   │       ├── humanization_summary.txt
+│   │       ├── humanized_vh.fasta
+│   │       └── humanized_vl.fasta
+│   ├── test_runCDRgraftingonly_20260402_134523_3c28ff47
+│   │   ├── input
+│   │   │   └── input_sequences.txt
+│   │   ├── logs
+│   │   │   └── pipeline.log
+│   │   ├── metadata.json
+│   │   └── output
+│   │       ├── humanization_summary.txt
+│   │       ├── humanized_vh.fasta
+│   │       └── humanized_vl.fasta
+│   ├── test-runcomplete-opt1_20260407_144820_fd0eb951
+│   │   ├── input
+│   │   │   └── input_sequences.txt
+│   │   ├── logs
+│   │   │   └── pipeline.log
+│   │   ├── metadata.json
+│   │   └── output
+│   │       ├── humanization_summary.txt
+│   │       ├── humanized_vh.fasta
+│   │       └── humanized_vl.fasta
+│   ├── test-runcomplete-opt2_20260407_145231_6a27cd0f
+│   │   ├── input
+│   │   │   └── input_sequences.txt
+│   │   ├── logs
+│   │   │   └── pipeline.log
+│   │   ├── metadata.json
+│   │   └── output
+│   │       ├── humanization_summary.txt
+│   │       ├── humanized_vh.fasta
+│   │       └── humanized_vl.fasta
+│   ├── test-runcomplete-opt3_20260407_145556_dfe0ad0e
+│   │   ├── input
+│   │   │   └── input_sequences.txt
+│   │   ├── logs
+│   │   │   └── pipeline.log
+│   │   ├── metadata.json
+│   │   └── output
+│   │       ├── humanization_summary.txt
+│   │       ├── humanized_vh.fasta
+│   │       └── humanized_vl.fasta
+│   ├── test_runscoresonly_20260402_134217_ee6b3dbf
+│   │   ├── input
+│   │   │   └── input_sequences.txt
+│   │   ├── logs
+│   │   │   └── pipeline.log
+│   │   ├── metadata.json
+│   │   └── output
+│   └── test_runstruturesonly1_20260402_133628_02c49d13
+│       ├── input
+│       │   └── input_sequences.txt
+│       ├── logs
+│       │   └── pipeline.log
+│       ├── metadata.json
+│       └── output
+├── assets
+├── cdr.py
+├── dash_app.py
+├── database_setup
+│   └── build_germline_database.py
+├── dockerfile
+├── Dockerfile2.ready
+├── Dockerfile.ready
+├── FRfileVH
+├── FRfileVL
+├── hGermVH
+├── hGermVL
+├── humanize.py
+├── imgt_download
+│   ├── IGHD.fasta
+│   ├── IGHJ.fasta
+│   ├── IGHV.fasta
+│   ├── IGKJ.fasta
+│   ├── IGKV.fasta
+│   ├── IGLJ.fasta
+│   └── IGLV.fasta
+├── LICENSE
+├── Makefile
+├── optimizations.py
+├── README.md
+├── rebuild.log
+├── requirements.txt
+└── test_input.txt
+
+48 directories, 83 files

@@ -16,6 +16,8 @@ from urllib.parse import parse_qs
 
 from dash import Dash, Input, Output, State, dcc, html, no_update
 
+from batch_analysis import parse_sequence_pairs, run_sequentially
+
 APP_DIR = Path(__file__).resolve().parent
 PIPELINE_SCRIPT = APP_DIR / "humanize.py"
 ASSETS_DIR = APP_DIR / "assets"
@@ -512,6 +514,62 @@ def start_background_run(run_id: str) -> None:
     worker.start()
 
 
+# ---------- Independent sequential batch coordinator ----------
+
+def batch_metadata_path(batch_id: str) -> Path:
+    return RUNS_DIR / "batches" / f"{batch_id}.json"
+
+
+def read_batch_metadata(batch_id: str) -> Optional[Dict[str, Any]]:
+    path = batch_metadata_path(batch_id)
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_batch_metadata(batch_id: str, metadata: Dict[str, Any]) -> None:
+    path = batch_metadata_path(batch_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def run_batch_in_background(batch_id: str) -> None:
+    batch = read_batch_metadata(batch_id)
+    if not batch:
+        return
+    batch["status"] = "running"
+    batch["started_at"] = datetime.now().isoformat(timespec="seconds")
+    write_batch_metadata(batch_id, batch)
+
+    def run_one(run_id: str) -> None:
+        current = read_batch_metadata(batch_id) or batch
+        current["current_run_id"] = run_id
+        write_batch_metadata(batch_id, current)
+        run_pipeline_in_background(run_id)
+        finished = read_metadata(run_id) or {}
+        current = read_batch_metadata(batch_id) or current
+        current["completed_count"] = int(current.get("completed_count", 0)) + 1
+        if finished.get("status") == "failed":
+            current["failed_count"] = int(current.get("failed_count", 0)) + 1
+        write_batch_metadata(batch_id, current)
+
+    try:
+        run_sequentially(batch["run_ids"], run_one)
+        batch = read_batch_metadata(batch_id) or batch
+        batch["status"] = "completed_with_errors" if batch.get("failed_count") else "completed"
+        batch["current_run_id"] = None
+        batch["finished_at"] = datetime.now().isoformat(timespec="seconds")
+        write_batch_metadata(batch_id, batch)
+    except Exception as exc:
+        batch = read_batch_metadata(batch_id) or batch
+        batch.update(status="failed", error=str(exc), finished_at=datetime.now().isoformat(timespec="seconds"))
+        write_batch_metadata(batch_id, batch)
+
+
+def start_background_batch(batch_id: str) -> None:
+    threading.Thread(target=run_batch_in_background, args=(batch_id,), daemon=True).start()
+
+
 # ---------- Layout helpers ----------
 
 def build_banner() -> html.Div:
@@ -762,6 +820,11 @@ def home_page() -> html.Div:
     return page_container(
         [
             build_banner(),
+            card([
+                html.H3("Multiple paired sequences?", style={"margin": "0 0 8px"}),
+                html.P("Use sequential batch analysis and review one result at a time.", style={"color": "#64748b", "margin": "0 0 14px"}),
+                dcc.Link("Open batch analysis", href="/batch", style={"color": "#1d4ed8", "fontWeight": "800"}),
+            ]),
             build_app_image(),
             card(
                 [
@@ -1215,7 +1278,7 @@ def parse_backmutation_display(content: str) -> Dict[Tuple[str, int], Dict[str, 
             results[current_key] = {"count": None, "changes": []}
             continue
         if current_key:
-            count_match = re.match(r"^Back-mutations realizadas:\s+(\d+)$", line.strip())
+            count_match = re.match(r"^Back-mutations performed:\s+(\d+)$", line.strip())
             if count_match:
                 results[current_key]["count"] = int(count_match.group(1))
                 continue
@@ -1224,6 +1287,14 @@ def parse_backmutation_display(content: str) -> Dict[Tuple[str, int], Dict[str, 
                 results[current_key]["changes"].append(
                     {"position": int(change_match.group(1)), "from": change_match.group(2), "to": change_match.group(3)}
                 )
+                continue
+            rule_match = re.match(r"^\s{2}(.+?)\s+\|\s+(\d+)\s+\|\s+(\S+)\s*$", line)
+            if rule_match and rule_match.group(1) != "Rule":
+                results[current_key].setdefault("rules", []).append({
+                    "name": rule_match.group(1),
+                    "count": int(rule_match.group(2)),
+                    "positions": rule_match.group(3),
+                })
     return results
 
 
@@ -1244,6 +1315,10 @@ def render_candidate_table(chain: str, candidates: List[Dict[str, Any]], mutatio
     rows = []
     for candidate in candidates:
         mutation_count = mutations.get((chain, candidate["candidate"]), {}).get("count")
+        used_rules = [
+            rule["name"] for rule in mutations.get((chain, candidate["candidate"]), {}).get("rules", [])
+            if rule["count"] > 0
+        ]
         rows.append(
             html.Tr([
                 html.Td(candidate["candidate"]),
@@ -1251,11 +1326,12 @@ def render_candidate_table(chain: str, candidates: List[Dict[str, Any]], mutatio
                 html.Td(candidate["germline"]),
                 html.Td(f"{candidate['identity']:.1f}%"),
                 html.Td("—" if mutation_count is None else mutation_count, style={"fontWeight": "800", "color": "#b45309"}),
+                html.Td(f"{len(used_rules)} applied" if used_rules else "None"),
             ])
         )
     table = html.Table(
         [
-            html.Thead(html.Tr([html.Th(label) for label in ("Candidate", "Source", "IMGT germline", "Identity", "Back-mutations")])),
+            html.Thead(html.Tr([html.Th(label) for label in ("Candidate", "Source", "IMGT germline", "Identity", "Back-mutations", "Rules used")])),
             html.Tbody(rows),
         ],
         className="result-table",
@@ -1273,6 +1349,8 @@ def render_backmutation_details(mutations: Dict[Tuple[str, int], Dict[str, Any]]
         if data["count"] is None:
             continue
         changes = data["changes"]
+        rule_information_available = "rules" in data
+        rules = [rule for rule in data.get("rules", []) if rule["count"] > 0]
         change_rows = [
             html.Tr([
                 html.Td(change["position"]),
@@ -1283,6 +1361,22 @@ def render_backmutation_details(mutations: Dict[Tuple[str, int], Dict[str, Any]]
         ]
         panels.append(html.Div([
             html.H4(f"{chain} candidate {candidate} · {data['count']} back-mutations", style={"margin": "0 0 10px"}),
+            html.Div([
+                html.Div("Rules applied", style={"fontWeight": "800", "marginBottom": "7px"}),
+                html.Table([
+                    html.Thead(html.Tr([html.Th("Rule"), html.Th("Changes"), html.Th("Positions")])),
+                    html.Tbody([
+                        html.Tr([html.Td(rule["name"]), html.Td(rule["count"]), html.Td(rule["positions"])])
+                        for rule in rules
+                    ]),
+                ], className="mutation-table", style={"borderCollapse": "collapse", "width": "100%"})
+                if rules else html.P(
+                    "No rule produced residue changes."
+                    if rule_information_available
+                    else "Rule information is not available for this legacy result.",
+                    style={"color": "#64748b"},
+                ),
+            ], style={"marginBottom": "14px"}),
             html.Table([
                 html.Thead(html.Tr([html.Th("Position"), html.Th("Humanized"), html.Th(""), html.Th("Backmutated")])),
                 html.Tbody(change_rows),
@@ -1295,6 +1389,70 @@ def render_backmutation_details(mutations: Dict[Tuple[str, int], Dict[str, Any]]
         html.H3("Back-mutation details", style={"margin": "0 0 6px"}),
         html.P("Positions use one-based sequence numbering.", style={"color": "#64748b", "margin": "0 0 16px"}),
         html.Div(panels, style={"display": "grid", "gap": "12px"}),
+    ])
+
+
+def batch_page() -> html.Div:
+    input_style = {
+        "width": "100%", "border": "1px solid #cbd5e1", "borderRadius": "12px",
+        "padding": "13px 15px", "background": "#fff", "color": "#0f172a",
+    }
+    return page_container([
+        build_banner(),
+        card([
+            html.Div([
+                html.Div([
+                    html.H2("Sequential batch analysis", style={"margin": "0 0 8px"}),
+                    html.P(
+                        "Add multiple VH/VL pairs. Each pair runs only after the previous one finishes.",
+                        style={"color": "#64748b", "margin": "0"},
+                    ),
+                ]),
+                dcc.Link("Single analysis", href="/", style={"color": "#1d4ed8", "fontWeight": "800"}),
+            ], style={"display": "flex", "justifyContent": "space-between", "gap": "16px", "flexWrap": "wrap"}),
+            html.Hr(style={"border": "0", "borderTop": "1px solid #e2e8f0", "margin": "22px 0"}),
+            html.Label("Batch name", style={"fontWeight": "750"}),
+            dcc.Input(id="batch-name", placeholder="Example: antibodies_august", style={**input_style, "margin": "8px 0 18px"}),
+            html.Label("Sequence pairs", style={"fontWeight": "750"}),
+            html.P(
+                "One row per pair: name,VH,VL. A header is optional; CSV, TSV and semicolon-separated text are accepted.",
+                style={"color": "#64748b", "fontSize": "0.9rem", "margin": "6px 0 10px"},
+            ),
+            dcc.Textarea(
+                id="batch-sequence-input", spellCheck=False,
+                placeholder="name,VH,VL\nantibody_1,EVQL...,DIQMT...\nantibody_2,QVQL...,EIVLT...",
+                style={**input_style, "minHeight": "220px", "fontFamily": "monospace", "resize": "vertical"},
+            ),
+            dcc.Upload(
+                id="batch-upload", multiple=False,
+                children=html.Div(["Or drag and drop / ", html.Strong("select a CSV or TSV file")]),
+                style={"margin": "14px 0 8px", "padding": "20px", "border": "1.5px dashed #93b5df", "borderRadius": "12px", "textAlign": "center", "background": "#f7fbff", "cursor": "pointer"},
+            ),
+            html.Div(id="batch-upload-name", style={"color": "#64748b", "fontSize": "0.88rem", "marginBottom": "18px"}),
+            html.Label("Run mode for every pair", style={"fontWeight": "750"}),
+            dcc.Dropdown(
+                id="batch-run-mode",
+                options=[{"label": label, "value": value} for value, label in RUN_MODE_LABELS.items()],
+                value="graft_backmutation", clearable=False, style={"margin": "8px 0 20px"},
+            ),
+            html.Button(
+                "Run batch sequentially", id="batch-run-button", n_clicks=0,
+                className="primary-run-button",
+                style={"width": "100%", "padding": "14px", "border": "0", "borderRadius": "12px", "background": "#1d4ed8", "color": "white", "fontWeight": "800", "cursor": "pointer"},
+            ),
+            html.Div(id="batch-feedback", style={"marginTop": "16px"}),
+        ]),
+        card([
+            html.H3("Batch progress", style={"margin": "0 0 12px"}),
+            html.Div(id="batch-live-status", children="No batch started.", style={"color": "#475569"}),
+            html.Div([
+                html.Label("Choose one result to visualize", style={"fontWeight": "750"}),
+                dcc.Dropdown(id="batch-result-selector", options=[], value=None, clearable=False, style={"marginTop": "8px"}),
+            ], style={"marginTop": "18px"}),
+        ]),
+        html.Div(id="batch-selected-result"),
+        dcc.Store(id="current-batch-store", storage_type="session"),
+        dcc.Interval(id="batch-status-interval", interval=STATUS_POLL_MS, n_intervals=0),
     ])
 
 
@@ -1618,6 +1776,8 @@ app.layout = html.Div(
 def render_page(pathname: str, search: str) -> html.Div:
     if pathname == "/results":
         return results_page(search)
+    if pathname == "/batch":
+        return batch_page()
     return home_page()
 
 
@@ -1788,6 +1948,142 @@ def poll_run_status(_: int, store_data: Optional[Dict[str, Any]]):
         return status_text, link
 
     return status_text, ""
+
+
+# ---------- Sequential batch interactions ----------
+
+@app.callback(
+    Output("batch-upload-name", "children"),
+    Input("batch-upload", "filename"),
+)
+def show_batch_uploaded_filename(filename: Optional[str]) -> str:
+    return f"Selected file: {filename}" if filename else "No batch file selected."
+
+
+@app.callback(
+    Output("batch-feedback", "children"),
+    Output("current-batch-store", "data"),
+    Input("batch-run-button", "n_clicks"),
+    State("batch-name", "value"),
+    State("batch-sequence-input", "value"),
+    State("batch-upload", "contents"),
+    State("batch-upload", "filename"),
+    State("batch-run-mode", "value"),
+    prevent_initial_call=True,
+)
+def launch_batch(
+    n_clicks: int,
+    batch_name: Optional[str],
+    pasted_text: Optional[str],
+    uploaded_contents: Optional[str],
+    uploaded_filename: Optional[str],
+    run_mode: Optional[str],
+):
+    if not n_clicks:
+        return no_update, no_update
+    if not batch_name or not batch_name.strip():
+        return html.Div("Please write the batch name.", style={"color": "#b91c1c", "fontWeight": "700"}), no_update
+    try:
+        if pasted_text and pasted_text.strip():
+            source_text = pasted_text
+            source = "pasted text"
+        elif uploaded_contents:
+            source_text = parse_upload(uploaded_contents)
+            source = uploaded_filename or "uploaded file"
+        else:
+            raise ValueError("Paste sequence pairs or upload a CSV/TSV file.")
+
+        pairs = parse_sequence_pairs(source_text, validate_sequence_pair)
+        selected_mode = run_mode or "graft_backmutation"
+        if selected_mode not in RUN_MODE_LABELS:
+            raise ValueError("Invalid batch run mode.")
+        optimization = "4" if selected_mode == "complete" else None
+        backmutation = selected_mode == "graft_backmutation"
+        batch_id = f"{sanitize_work_name(batch_name)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        items = []
+        for pair in pairs:
+            metadata = create_run_structure(
+                f"{batch_name}_{pair.name}",
+                sequence_pair_to_input_text(pair.vh, pair.vl),
+                selected_mode,
+                optimization,
+                backmutation,
+            )
+            update_metadata(metadata["run_id"], batch_id=batch_id, batch_item_name=pair.name)
+            items.append({"name": pair.name, "run_id": metadata["run_id"]})
+
+        batch_metadata = {
+            "batch_id": batch_id,
+            "batch_name": sanitize_work_name(batch_name),
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "status": "queued",
+            "source": source,
+            "run_mode": selected_mode,
+            "items": items,
+            "run_ids": [item["run_id"] for item in items],
+            "completed_count": 0,
+            "failed_count": 0,
+            "current_run_id": None,
+            "error": None,
+        }
+        write_batch_metadata(batch_id, batch_metadata)
+        start_background_batch(batch_id)
+        return html.Div([
+            html.Div("Batch started successfully.", style={"color": "#166534", "fontWeight": "800"}),
+            html.Div(f"Pairs queued: {len(items)}"),
+            html.Div("Execution policy: sequential, one pair at a time."),
+            html.Div(f"Mode: {RUN_MODE_LABELS[selected_mode]}"),
+            html.Div(f"Batch ID: {batch_id}", style={"fontFamily": "monospace", "fontSize": "0.85rem"}),
+        ], style={"display": "grid", "gap": "5px"}), {"batch_id": batch_id}
+    except Exception as exc:
+        return html.Div(str(exc), style={"color": "#b91c1c", "fontWeight": "700"}), no_update
+
+
+@app.callback(
+    Output("batch-live-status", "children"),
+    Output("batch-result-selector", "options"),
+    Output("batch-result-selector", "value"),
+    Input("batch-status-interval", "n_intervals"),
+    State("current-batch-store", "data"),
+    State("batch-result-selector", "value"),
+)
+def poll_batch_status(_: int, store_data: Optional[Dict[str, Any]], selected_run: Optional[str]):
+    if not store_data or not store_data.get("batch_id"):
+        return "No batch started.", [], None
+    batch = read_batch_metadata(store_data["batch_id"])
+    if not batch:
+        return "Batch metadata not found.", [], None
+
+    options = []
+    for item in batch.get("items", []):
+        run = read_metadata(item["run_id"]) or {}
+        status = run.get("status", "queued")
+        options.append({"label": f"{item['name']} — {format_status(status)}", "value": item["run_id"]})
+    values = {option["value"] for option in options}
+    if selected_run not in values:
+        completed = [option["value"] for option in options if (read_metadata(option["value"]) or {}).get("status") in {"completed", "failed"}]
+        selected_run = completed[0] if completed else None
+
+    total = len(batch.get("items", []))
+    completed_count = int(batch.get("completed_count", 0))
+    current = batch.get("current_run_id")
+    current_name = next((item["name"] for item in batch.get("items", []) if item["run_id"] == current), "—")
+    status_view = html.Div([
+        html.Div(f"Status: {batch.get('status', 'unknown')}", style={"fontWeight": "800"}),
+        html.Div(f"Finished: {completed_count} of {total} · Failed: {batch.get('failed_count', 0)}"),
+        html.Div(f"Currently processing: {current_name}"),
+    ], style={"display": "grid", "gap": "5px"})
+    return status_view, options, selected_run
+
+
+@app.callback(
+    Output("batch-selected-result", "children"),
+    Input("batch-result-selector", "value"),
+)
+def show_one_batch_result(run_id: Optional[str]):
+    if not run_id:
+        return ""
+    return results_page(f"?run={run_id}")
 
 
 if __name__ == "__main__":

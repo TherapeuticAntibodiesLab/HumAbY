@@ -88,11 +88,19 @@ def backmutate(aa_filename, opt1_dir, xml_filename, chain):
         ## Now process backmutations & print result
         proposed = record.seq
         backmutated = list(proposed)
+        applied_rules = {
+            'murine_germline_difference': set(),
+            'cysteine_proline': set(),
+            'position_71': set(),
+            'fr4_motif': set(),
+        }
 
         ## for each nonzero difference in FR region:
         ##    proposed <- murine
         for i in diffs:
             if i > 0 and i in fr_indices:
+                if backmutated[i] != murine[i]:
+                    applied_rules['murine_germline_difference'].add(i + 1)
                 backmutated[i] = murine[i]
         ## for each disagreement between murine and proposed in FR region:
         ##   if proposed == cysteine or proline:
@@ -102,17 +110,34 @@ def backmutate(aa_filename, opt1_dir, xml_filename, chain):
         for i in fr_indices:
             if proposed[i] != murine[i]:
                 if proposed[i] == 'C' or proposed[i] == 'P':
+                    if backmutated[i] != murine[i]:
+                        applied_rules['cysteine_proline'].add(i + 1)
                     backmutated[i] = murine[i]
             if i == 71:
+                if backmutated[i] != murine[i]:
+                    applied_rules['position_71'].add(i + 1)
                 backmutated[i] = murine[i]
 
         ## if proposed FR4 does not start with WGXG:
         ##    proposed FR4[0:1] <- WG
         ##    proposed FR4[3] <- G
-        backmutated[FR4start] = 'W' if chain == 'VH' else 'F'
-        backmutated[FR4start+1] = 'G'
-        backmutated[FR4start+3] = 'G'
+        fr4_values = {
+            FR4start: 'W' if chain == 'VH' else 'F',
+            FR4start + 1: 'G',
+            FR4start + 3: 'G',
+        }
+        for position, residue in fr4_values.items():
+            if backmutated[position] != residue:
+                applied_rules['fr4_motif'].add(position + 1)
+            backmutated[position] = residue
         print('backmt', "".join(backmutated))
+        for rule_name, positions in applied_rules.items():
+            ordered = sorted(positions)
+            print(
+                'rule', rule_name,
+                'count=' + str(len(ordered)),
+                'positions=' + (','.join(map(str, ordered)) if ordered else '-')
+            )
     hGerm.close()
 
 def main():
