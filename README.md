@@ -8,7 +8,7 @@ This pipeline implements a **VDJ-based CDR grafting approach** for antibody huma
 
 ### Key Features
 
-- **VDJ-Reconstructed Database**: 234,514 human germline frameworks from complete V×D×J and V×J combinations
+- **VDJ-Reconstructed Database**: 243,771 human germline frameworks from complete V×D×J and V×J combinations
 - **Perfect CDR Preservation**: Robust validation ensures exact murine CDR sequences are maintained
 - **BLAST-Based Framework Selection**: Homology-driven selection of optimal human frameworks
 - **Graceful Failure**: No fallbacks or hardcoded solutions - fails predictably when conditions aren't met
