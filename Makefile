@@ -1,33 +1,14 @@
-%_opt1: ../000-input/%.aa venv imgt_germline_database ANARCII
-	. venv/bin/activate; \
-	  python3 humanize.py $< --optimization 1 -o $@
-	mv FRfileV* $@
-	mv hGerm* $@
+.PHONY: all run dashboard test
 
-venv: requirements.txt
-	python3 -m venv $@
-	. venv/bin/activate; pip install -r $<
+PYTHON := .venv/bin/python
 
-imgt_germline_database: imgt_download
-	. venv/bin/activate; \
-	  python3 database_setup/build_germline_database.py $< $@
+all: run
 
-IMGT_HUMAN_IG := https://www.imgt.org/download/V-QUEST/IMGT_V-QUEST_reference_directory/Homo_sapiens/IG
+run:
+	$(PYTHON) -B run_pipeline.py data/inputs/$(NAME).aa $(ARGS)
 
-imgt_download:
-	mkdir -p $@
-	echo Heavy chain segments
-	wget -P $@ "$(IMGT_HUMAN_IG)/IGHV.fasta"
-	wget -P $@ "$(IMGT_HUMAN_IG)/IGHD.fasta"
-	wget -P $@ "$(IMGT_HUMAN_IG)/IGHJ.fasta"
-	echo Light chain segments (Kappa)
-	wget -P $@ "$(IMGT_HUMAN_IG)/IGKV.fasta"
-	wget -P $@ "$(IMGT_HUMAN_IG)/IGKJ.fasta"
-	echo Light chain segments (Lambda)
-	wget -P $@ "$(IMGT_HUMAN_IG)/IGLV.fasta"
-	wget -P $@ "$(IMGT_HUMAN_IG)/IGLJ.fasta"
+dashboard:
+	$(PYTHON) -B dash_app_integrado.py
 
-ANARCII:
-	git clone https://github.com/oxpig/ANARCII.git
-	. venv/bin/activate; \
-	  cd $@; pip install .
+test:
+	$(PYTHON) -B -m pytest

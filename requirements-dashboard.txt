@@ -1,0 +1,3 @@
+# Instale somente na .venv do projeto. As dependências científicas já estão nesse ambiente.
+dash==4.4.1
+pytest==9.1.1

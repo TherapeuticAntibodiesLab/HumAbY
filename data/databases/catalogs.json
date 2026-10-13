@@ -1,0 +1,41 @@
+{
+  "scope": "Current murine catalogs used for Backmutation and saved-reference identification; human IMGT grafting catalog is separate.",
+  "active": {
+    "source": "NCBI IgBLAST 1.22.0 package preserved in local project copies",
+    "database_prefix": "data/databases/mouse_ncbi/mouse_V",
+    "sequences": 512,
+    "residues": 50181,
+    "database_build_date": "2022-08-24",
+    "sha256": {
+      "mouse_V.pdb": "18ca9f0ecf551c3df72a80b3a01613a4c5e54b86cce5f1b39a24c8fab09cbe14",
+      "mouse_V.phr": "fad095a63dcad0f24981dd036215c2ed662d3a8a0b8110922737bcc3d17c9546",
+      "mouse_V.pin": "324c77e1384562affb151d27404e2ba16b7ec52883474e3751aea1fdfb8bb628",
+      "mouse_V.pjs": "00b34b59f07f96cfc524d251f716cc2d1b0a440585958820ff8105c90401d809",
+      "mouse_V.pog": "2a45fc7f455e5925e44ad85a7e9268f3a579f75f7e29c1496e37f4b409d5ecb5",
+      "mouse_V.pos": "70a400dc0bbcb0a8b0461931e4d78adb836dda3ec0f6e21723d22fdd93ed00e6",
+      "mouse_V.pot": "7340acc56334e5332e73d262c625d390a466e8b0a80db569dcdf5eecdbf1c202",
+      "mouse_V.psq": "aadb5989ceb69731cdece270547d89c7a105db1c4c81ea1cfd318a1d29ff816e",
+      "mouse_V.ptf": "004ac25e7a9ad2ce924fcf213a13d0d2a694118e56726bcbb392fcf8b75fa843",
+      "mouse_V.pto": "9da61b53c3e0240e366d8ed3066cf400f1be260d26df5700c4d2067c316d2f81"
+    }
+  },
+  "preserved_inactive": {
+    "source": "Murine IMGT V sequences downloaded and translated on 2026-10-06",
+    "database_prefix": "data/databases/mouse_imgt/mouse_V",
+    "nucleotide_sources": "data/databases/mouse_imgt/sources",
+    "sequences": 864,
+    "residues": 83156,
+    "sha256": {
+      "mouse_V.fasta": "8c5174ef0b1b771bcc673898a6ed46b3c0bbaa0182c451ef55124f816c15cd53",
+      "mouse_V.pdb": "80721c0ac31b46915bb96601ce68e9f242efe2a018e3d8578cc9e9879448e656",
+      "mouse_V.phr": "9952c58acc4b41d556c333dbb0da1be74709f07ae69b1f316cfe8c38aebd101f",
+      "mouse_V.pin": "2fc0cde406bde8a008dce53d135f12673e99ce18c41580f75e656c590440d773",
+      "mouse_V.pog": "143508762937ad6df8e128708f05f526cf0762633e43410f8f49975fa4da0e0b",
+      "mouse_V.pos": "c5affe70c5d575adbdb966f81425bfc6441b240a02d9ad744d699af067382cc1",
+      "mouse_V.pot": "dd65116804cdf101e4fd638c12408d50b5ea3320c72bde6c8811b16290a1aa2e",
+      "mouse_V.psq": "12405de00b1b87148ddac2c7fc874bc24cedb66d6fb2aba36a21ab28b4fd5091",
+      "mouse_V.ptf": "67982e4d7b1490b09cce06e7c29175c6bd011cd542cfacb1a1c310084a50821a",
+      "mouse_V.pto": "122593e52a1b81b14373c1926658ee176c10768bb237f4ac2d6abf085f2f91e5"
+    }
+  }
+}
