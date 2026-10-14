@@ -47,7 +47,7 @@ PIPELINE_LOCK = threading.Lock()
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-app = Dash(__name__, suppress_callback_exceptions=True, title="Antibody Humanizer")
+app = Dash(__name__, suppress_callback_exceptions=True, title="HumAbY - Antibody Humanizer")
 server = app.server
 
 app.index_string = """
@@ -570,7 +570,7 @@ def build_banner() -> html.Div:
                         },
                     ),
                     html.H1(
-                        "Antibody Humanizer",
+                        "HumAbY - Antibody Humanizer",
                         style={
                             "margin": "0",
                             "fontSize": "clamp(1.9rem, 4vw, 2.65rem)",
@@ -1002,7 +1002,7 @@ def home_page() -> html.Div:
                                                     ),
                                                     html.Span(
                                                         "?",
-                                                        title="Optimization is used only in Run complete mode. The program supports levels 1 to 4, and the default full pipeline uses level 4 when no level is explicitly provided.",
+                                                        title="Run complete uses optimization level 1 in this interface.",
                                                         className="help-badge",
                                                         style={
                                                             "display": "inline-flex",
@@ -1057,89 +1057,8 @@ def home_page() -> html.Div:
                                                         ),
                                                         "value": "1",
                                                     },
-                                                    {
-                                                        "label": html.Span(
-                                                            [
-                                                                html.Span("Level 2 - Automatic framework correction", style={"marginRight": "8px"}),
-                                                                html.Span(
-                                                                    "?",
-                                                                    title=OPTIMIZATION_HELP["2"],
-                                                                    className="mini-help-badge",
-                                                                    style={
-                                                                        "display": "inline-flex",
-                                                                        "alignItems": "center",
-                                                                        "justifyContent": "center",
-                                                                        "width": "18px",
-                                                                        "height": "18px",
-                                                                        "borderRadius": "999px",
-                                                                        "background": "#e2e8f0",
-                                                                        "color": "#475569",
-                                                                        "fontWeight": "800",
-                                                                        "cursor": "help",
-                                                                        "fontSize": "0.7rem",
-                                                                    },
-                                                                ),
-                                                            ],
-                                                            style={"display": "inline-flex", "alignItems": "center", "flexWrap": "wrap"},
-                                                        ),
-                                                        "value": "2",
-                                                    },
-                                                    {
-                                                        "label": html.Span(
-                                                            [
-                                                                html.Span("Level 3 - Back-mutation analysis", style={"marginRight": "8px"}),
-                                                                html.Span(
-                                                                    "?",
-                                                                    title=OPTIMIZATION_HELP["3"],
-                                                                    className="mini-help-badge",
-                                                                    style={
-                                                                        "display": "inline-flex",
-                                                                        "alignItems": "center",
-                                                                        "justifyContent": "center",
-                                                                        "width": "18px",
-                                                                        "height": "18px",
-                                                                        "borderRadius": "999px",
-                                                                        "background": "#e2e8f0",
-                                                                        "color": "#475569",
-                                                                        "fontWeight": "800",
-                                                                        "cursor": "help",
-                                                                        "fontSize": "0.7rem",
-                                                                    },
-                                                                ),
-                                                            ],
-                                                            style={"display": "inline-flex", "alignItems": "center", "flexWrap": "wrap"},
-                                                        ),
-                                                        "value": "3",
-                                                    },
-                                                    {
-                                                        "label": html.Span(
-                                                            [
-                                                                html.Span("Level 4 - Full scientific assessment (default)", style={"marginRight": "8px"}),
-                                                                html.Span(
-                                                                    "?",
-                                                                    title=OPTIMIZATION_HELP["4"],
-                                                                    className="mini-help-badge",
-                                                                    style={
-                                                                        "display": "inline-flex",
-                                                                        "alignItems": "center",
-                                                                        "justifyContent": "center",
-                                                                        "width": "18px",
-                                                                        "height": "18px",
-                                                                        "borderRadius": "999px",
-                                                                        "background": "#e2e8f0",
-                                                                        "color": "#475569",
-                                                                        "fontWeight": "800",
-                                                                        "cursor": "help",
-                                                                        "fontSize": "0.7rem",
-                                                                    },
-                                                                ),
-                                                            ],
-                                                            style={"display": "inline-flex", "alignItems": "center", "flexWrap": "wrap"},
-                                                        ),
-                                                        "value": "4",
-                                                    },
                                                 ],
-                                                value="4",
+                                                value="1",
                                                 labelStyle=choice_label_style,
                                                 inputStyle={
                                                     "margin": "0",
@@ -1435,10 +1354,9 @@ def batch_page() -> html.Div:
                     dcc.Dropdown(
                         id="batch-optimization-level",
                         options=[
-                            {"label": label, "value": value}
-                            for value, label in OPTIMIZATION_LABELS.items()
+                            {"label": OPTIMIZATION_LABELS["1"], "value": "1"}
                         ],
-                        value="4",
+                        value="1",
                         clearable=False,
                         style={"margin": "8px 0 12px"},
                     ),
@@ -1880,7 +1798,7 @@ def launch_run(
         return html.Div("Please write the work name.", style={"color": "#b91c1c", "fontWeight": "700"}), no_update
 
     run_mode = run_mode or "complete"
-    effective_optimization = (optimization_level or "4") if run_mode == "complete" else None
+    effective_optimization = "1" if run_mode == "complete" else None
     backmutation = run_mode == "graft_backmutation" or (
         run_mode == "complete" and "enabled" in (backmutation_selection or [])
     )
@@ -2062,7 +1980,7 @@ def launch_batch(
         selected_mode = run_mode or "graft_backmutation"
         if selected_mode not in RUN_MODE_LABELS:
             raise ValueError("Invalid batch run mode.")
-        optimization = (optimization_level or "4") if selected_mode == "complete" else None
+        optimization = "1" if selected_mode == "complete" else None
         backmutation = selected_mode == "graft_backmutation" or (
             selected_mode == "complete" and "enabled" in (backmutation_selection or [])
         )
